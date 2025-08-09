@@ -12,7 +12,7 @@ import { DEFAULT_WAITLIST_SORT_BY, DEFAULT_WAITLIST_SORT_DIRECTION, WAITLIST_STA
 import type { WaitlistOptions, WaitlistRequest, WaitlistUser } from "./types";
 import type { BetterAuthPlugin, Session, User, Where, ZodType } from "better-auth";
 
-export function waitlist(options?: WaitlistOptions) {
+export function waitlist(options?: WaitlistOptions): BetterAuthPlugin {
   const opts = {
     enabled: options?.enabled ?? false,
     schema: options?.schema,

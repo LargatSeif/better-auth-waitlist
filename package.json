@@ -3,8 +3,9 @@
   "type": "module",
   "version": "2.0.0",
   "description": "A Better Auth plugin for waitlist functionality",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "dist/cjs/index.cjs",
+  "module": "dist/esm/index.js",
+  "types": "dist/esm/index.d.ts",
   "files": [
     "dist"
   ],
