@@ -1,5 +1,3 @@
-import type { BetterAuthPlugin, Session, User, Where, ZodType } from "better-auth";
-import type { InferFieldsInput } from "better-auth/db";
 
 import { APIError, createAuthEndpoint, createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
 import { mergeSchema } from "better-auth/db";
@@ -7,11 +5,12 @@ import * as HttpStatusCodes from "stoker/http-status-codes";
 import { jsonContent } from "stoker/openapi/helpers";
 import * as z from "zod";
 
-import type { WaitlistOptions, WaitlistRequest, WaitlistUser } from "./types";
 
 import { ERROR_CODES, ERROR_MESSAGES_MAP } from "./constants";
 import { convertAdditionalFieldsToZodSchema, entriesFromObject } from "./helpers";
-import { DEFAULT_WAITLIST_SORT_BY, DEFAULT_WAITLIST_SORT_DIRECTION, schema, WAITLIST_STATUS, waitlistRequestSchema, waitlistSearchSchema } from "./schema";
+import { DEFAULT_WAITLIST_SORT_BY, DEFAULT_WAITLIST_SORT_DIRECTION, WAITLIST_STATUS, schema, waitlistRequestSchema, waitlistSearchSchema } from "./schema";
+import type { WaitlistOptions, WaitlistRequest, WaitlistUser } from "./types";
+import type { BetterAuthPlugin, Session, User, Where, ZodType } from "better-auth";
 
 export function waitlist(options?: WaitlistOptions) {
   const opts = {
@@ -38,7 +37,6 @@ export function waitlist(options?: WaitlistOptions) {
     ...opts.additionalFields,
   };
 
-  type WaitlistUserModified = WaitlistUser & InferFieldsInput<typeof opts.additionalFields>;
 
   /**
    * Ensures a valid session, if not will throw.
@@ -68,7 +66,7 @@ export function waitlist(options?: WaitlistOptions) {
     };
   });
 
-  const model = Object.keys(merged_schema)[0] as string;
+  const model = Object.keys(merged_schema)[0];
 
   const addUserToWaitlist = createAuthEndpoint(
     "/waitlist/add-user",
@@ -84,10 +82,70 @@ export function waitlist(options?: WaitlistOptions) {
       metadata: {
         openapi: {
           responses: {
-            [HttpStatusCodes.OK]: jsonContent(z.number(), "The waitlist count"),
-            [HttpStatusCodes.UNAUTHORIZED]: jsonContent(z.number(), "The waitlist count"),
-            [HttpStatusCodes.UNPROCESSABLE_ENTITY]: jsonContent(z.number(), "Validation error"),
-            [HttpStatusCodes.TOO_MANY_REQUESTS]: jsonContent(z.number(), "The waitlist count"),
+            [HttpStatusCodes.CREATED]: {
+              description: "The request is created successfully",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      message: { type: "string" },
+                      success: { type: "boolean" },
+                      details: {
+                        type: "object",
+                        properties: {
+                          id: { type: "string" },
+                          requestedAt: { type: "string", format: "date-time" },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            [HttpStatusCodes.UNAUTHORIZED]: {
+              description: "Unauthorized access",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      code: { type: "string" },
+                      message: { type: "string" },
+                    },
+                  },
+                },
+              },
+            },
+            [HttpStatusCodes.UNPROCESSABLE_ENTITY]: {
+              description: "Validation error",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      code: { type: "string" },
+                      message: { type: "string" },
+                      error: { type: "object" },
+                    },
+                  },
+                },
+              },
+            },
+            [HttpStatusCodes.TOO_MANY_REQUESTS]: {
+              description: "Waitlist is full",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      code: { type: "string" },
+                      message: { type: "string" },
+                    },
+                  },
+                },
+              },
+            },
           },
         },
       },
@@ -104,18 +162,16 @@ export function waitlist(options?: WaitlistOptions) {
         email: string;
       } & Record<string, any>;
 
-      const alreadyInWaitlist = await ctx.context.adapter.findOne<WaitlistUserModified>(
-        {
-          model,
-          where: [
-            {
-              field: "email",
-              value: email,
-              operator: "eq",
-            },
-          ],
-        },
-      );
+      const alreadyInWaitlist = await ctx.context.adapter.findOne({
+        model,
+        where: [
+          {
+            field: "email",
+            value: email,
+            operator: "eq",
+          },
+        ],
+      });
 
       if (alreadyInWaitlist) {
         throw ctx.error(HttpStatusCodes.UNAUTHORIZED, {
@@ -171,6 +227,7 @@ export function waitlist(options?: WaitlistOptions) {
         if (!isAllowed) {
           throw ctx.error(HttpStatusCodes.UNAUTHORIZED, {
             code: ERROR_CODES.DOMAIN_NOT_ALLOWED,
+            success: false,
             message: ERROR_MESSAGES_MAP[ERROR_CODES.DOMAIN_NOT_ALLOWED],
           });
         }
@@ -196,12 +253,10 @@ export function waitlist(options?: WaitlistOptions) {
             },
           });
         }
-
-        // if the entry is valid, add it to the waitlist
       }
 
       // add the entry to the waitlist
-      const waitlist = await ctx.context.adapter.create<WaitlistUserModified>({
+      const newRequest = await ctx.context.adapter.create({
         model,
         data: {
           email,
@@ -210,17 +265,13 @@ export function waitlist(options?: WaitlistOptions) {
         },
       });
 
-      const recap = {
-        details: {
-          id: waitlist.id,
-          requestedAt: waitlist.requestedAt,
-        },
-        success: true,
-      };
-
       return ctx.json({
-        message: "Created waitlist entry",
-        recap,
+        message: "Request created successfully",
+        success: true,
+        details: {
+          id: newRequest.id,
+          requestedAt: newRequest.requestedAt,
+        },
       }, {
         status: HttpStatusCodes.CREATED,
       });
@@ -241,7 +292,6 @@ export function waitlist(options?: WaitlistOptions) {
       use: [adminMiddleware],
       metadata: {
         openapi: {
-
           responses: {
             [HttpStatusCodes.OK]: jsonContent(
               z.array(waitlistRequestSchema),
@@ -253,9 +303,9 @@ export function waitlist(options?: WaitlistOptions) {
     },
     async (ctx) => {
       // Query is already validated by Better Call - cast to proper type
-      const parsedQuery = ctx.query as z.infer<typeof searchQuerySchema>;
+      const parsedQuery = ctx.query;
 
-      const where: Where[] = [];
+      const where: Array<Where> = [];
       let sortByParams: { field: string; direction: "asc" | "desc" } = {
         field: DEFAULT_WAITLIST_SORT_BY,
         direction: DEFAULT_WAITLIST_SORT_DIRECTION,
@@ -273,17 +323,17 @@ export function waitlist(options?: WaitlistOptions) {
       if (sortBy) {
         sortByParams = {
           field: sortBy as string,
-          direction: (sortDirection as "asc" | "desc") || DEFAULT_WAITLIST_SORT_DIRECTION,
+          direction: sortDirection as "asc" | "desc",
         };
       }
 
-      if (additionalFields) {
+      if (Object.keys(additionalFields).length > 0) {
         for (const [key, value] of entriesFromObject(additionalFields)) {
           where.push({ field: key, value, operator: "eq" } as unknown as Where);
         }
       }
 
-      const waitlist = await ctx.context.adapter.findMany<WaitlistUserModified[]>({
+      const waitlistEntries = await ctx.context.adapter.findMany({
         model,
         sortBy: sortByParams,
         where: where.length > 0 ? where : undefined,
@@ -291,7 +341,7 @@ export function waitlist(options?: WaitlistOptions) {
         offset: ((page as number) === 1 ? 0 : (page as number) - 1) * (limit as number),
       });
 
-      return { waitlist };
+      return { waitlist: waitlistEntries };
     },
   );
 
@@ -358,7 +408,7 @@ export function waitlist(options?: WaitlistOptions) {
 
       // Session is already validated by adminMiddleware
 
-      const waitlist = await ctx.context.adapter.update<WaitlistUserModified>({
+      const rejectedEntry = await ctx.context.adapter.update({
         model,
         where: [
           {
@@ -374,7 +424,7 @@ export function waitlist(options?: WaitlistOptions) {
         },
       });
 
-      if (!waitlist) {
+      if (!rejectedEntry) {
         throw ctx.error(HttpStatusCodes.NOT_FOUND, {
           code: ERROR_CODES.WAITLIST_ENTRY_NOT_FOUND,
           message: ERROR_MESSAGES_MAP[ERROR_CODES.WAITLIST_ENTRY_NOT_FOUND],
@@ -417,7 +467,7 @@ export function waitlist(options?: WaitlistOptions) {
 
       // Session is already validated by adminMiddleware
 
-      const waitlist = await ctx.context.adapter.update<WaitlistUserModified>({
+      const approvedEntry = await ctx.context.adapter.update({
         model,
         where: [
           {
@@ -433,7 +483,7 @@ export function waitlist(options?: WaitlistOptions) {
         },
       });
 
-      if (!waitlist) {
+      if (!approvedEntry) {
         throw ctx.error(HttpStatusCodes.NOT_FOUND, {
           code: ERROR_CODES.WAITLIST_ENTRY_NOT_FOUND,
           message: ERROR_MESSAGES_MAP[ERROR_CODES.WAITLIST_ENTRY_NOT_FOUND],
@@ -442,7 +492,7 @@ export function waitlist(options?: WaitlistOptions) {
 
       return ctx.json({
         message: "Waitlist entry approved",
-        details: waitlist,
+        details: approvedEntry,
       }, {
         status: HttpStatusCodes.OK,
       });
@@ -457,7 +507,7 @@ export function waitlist(options?: WaitlistOptions) {
       databaseHooks: {
         waitlist: {
           create: {
-            async before(payload: { data: WaitlistRequest }) {
+            before(payload: { data: WaitlistRequest }) {
               return {
                 data: {
                   ...payload.data,

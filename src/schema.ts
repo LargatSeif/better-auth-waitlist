@@ -1,9 +1,9 @@
-import type { AuthPluginSchema } from "better-auth";
 
 import { generateId } from "better-auth";
 import { z } from "zod/v4";
 
 import { keysFromObject, valuesFromObject } from "./helpers";
+import type { AuthPluginSchema } from "better-auth";
 
 export const WAITLIST_SORT_DIRECTION = ["asc", "desc"] as const;
 

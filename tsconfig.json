@@ -13,6 +13,6 @@
     "declaration": true,
     "outDir": "dist"
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*","vite.config.ts","eslint.config.js", "tests/waitlist-api.test.ts", "tests/waitlist-client.test.ts"],
   "exclude": ["node_modules", "dist", "__tests__"]
 }

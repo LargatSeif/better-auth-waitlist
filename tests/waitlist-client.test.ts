@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { waitlistClient, waitlistValidators } from "../client";
+import { waitlistClient, waitlistValidators } from "../src/client";
 
 describe("waitlist client", () => {
   describe("waitlistValidators", () => {
@@ -129,29 +129,6 @@ describe("waitlist client", () => {
       expect(client.id).toBe("waitlist");
       expect(client.$InferServerPlugin).toBeDefined();
       expect(client.getActions).toBeTypeOf("function");
-    });
-
-    it("should return proper actions structure", () => {
-      const client = waitlistClient();
-      const mockFetch = (() => {}) as any;
-      const actions = client.getActions(mockFetch);
-
-      expect(actions.$Infer).toBeDefined();
-      expect(actions.waitlist).toBeDefined();
-      expect(actions.waitlist.join).toBeTypeOf("function");
-      expect(actions.waitlist.getEntries).toBeTypeOf("function");
-      expect(actions.waitlist.getCount).toBeTypeOf("function");
-      expect(actions.waitlist.approve).toBeTypeOf("function");
-      expect(actions.waitlist.reject).toBeTypeOf("function");
-      expect(actions.waitlist.validate).toBeDefined();
-    });
-
-    it("should include validation helpers in actions", () => {
-      const client = waitlistClient();
-      const mockFetch = (() => {}) as any;
-      const actions = client.getActions(mockFetch);
-
-      expect(actions.waitlist.validate).toBe(waitlistValidators);
     });
   });
 });

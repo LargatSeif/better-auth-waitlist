@@ -33,7 +33,7 @@ export interface WaitlistJoinResponse {
 }
 
 export interface WaitlistListResponse {
-  waitlist: WaitlistEntry[];
+  waitlist: Array<WaitlistEntry>;
 }
 
 export interface WaitlistCountResponse {
@@ -56,14 +56,14 @@ export const waitlistValidators = {
   /**
    * Validate email domain against allowed domains
    */
-  isValidDomain: (email: string, allowedDomains: string[] = ["@edf.com", "@devoteam.com"]) => {
+  isValidDomain: (email: string, allowedDomains: Array<string> = ["@edf.com", "@devoteam.com"]) => {
     return allowedDomains.some(domain => email.endsWith(domain));
   },
 
   /**
    * Validate department
    */
-  isValidDepartment: (department: string, validDepartments: string[] = ["IT", "Engineering", "Marketing", "Sales", "HR"]) => {
+  isValidDepartment: (department: string, validDepartments: Array<string> = ["IT", "Engineering", "Marketing", "Sales", "HR"]) => {
     return validDepartments.includes(department);
   },
 
@@ -71,7 +71,7 @@ export const waitlistValidators = {
    * Validate complete waitlist entry data
    */
   validateWaitlistData: (data: WaitlistJoinData) => {
-    const errors: string[] = [];
+    const errors: Array<string> = [];
 
     if (!data.email || !data.email.includes("@")) {
       errors.push("Valid email is required");
@@ -94,7 +94,7 @@ export const waitlistValidators = {
   },
 };
 
-export function waitlistClient() {
+export function waitlistClient(): BetterAuthClientPlugin {
   return {
     id: "waitlist",
     $InferServerPlugin: {} as ReturnType<typeof waitlist>,

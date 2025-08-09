@@ -1,5 +1,6 @@
 {
   "name": "better-auth-waitlist",
+  "type": "module",
   "version": "1.0.0",
   "description": "A Better Auth plugin for waitlist functionality",
   "main": "dist/index.js",
@@ -7,10 +8,27 @@
   "files": [
     "dist"
   ],
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.cts",
+        "default": "./dist/cjs/index.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
   "scripts": {
-    "build": "tsup",
-    "dev": "tsup --watch",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "vite dev",
+    "build": "vite build && publint --strict",
+    "test": "vitest run --watch",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint . --ext .ts,.tsx,.js,.jsx",
+    "lint:fix": "eslint . --ext .ts,.tsx,.js,.jsx --fix"
   },
   "keywords": [
     "better-auth",
@@ -22,13 +40,19 @@
   "license": "MIT",
   "packageManager": "pnpm@10.13.1",
   "devDependencies": {
+    "@changesets/cli": "^2.29.5",
     "@tanstack/config": "^0.20.0",
     "@tanstack/eslint-config": "^0.3.0",
+    "@vitest/ui": "^3.2.4",
+    "eslint": "^9.33.0",
     "tsup": "^8.5.0",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "vite": "^7.1.1",
+    "vitest": "^3.2.4"
   },
   "dependencies": {
     "better-auth": "^1.3.4",
+    "publint": "^0.3.12",
     "stoker": "^2.0.1",
     "zod": "^4.0.16"
   }
