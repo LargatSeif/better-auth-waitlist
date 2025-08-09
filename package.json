@@ -1,7 +1,7 @@
 {
   "name": "better-auth-waitlist",
   "type": "module",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "A Better Auth plugin for waitlist functionality",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -28,7 +28,10 @@
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
     "lint": "eslint . --ext .ts,.tsx,.js,.jsx",
-    "lint:fix": "eslint . --ext .ts,.tsx,.js,.jsx --fix"
+    "lint:fix": "eslint . --ext .ts,.tsx,.js,.jsx --fix",
+    "changeset": "changeset",
+    "version": "changeset version",
+    "publish": "pnpm build && changeset publish"
   },
   "keywords": [
     "better-auth",
