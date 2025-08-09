@@ -23,6 +23,7 @@
   "packageManager": "pnpm@10.13.1",
   "devDependencies": {
     "@tanstack/config": "^0.20.0",
+    "@tanstack/eslint-config": "^0.3.0",
     "tsup": "^8.5.0",
     "typescript": "^5.9.2"
   },
