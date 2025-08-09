@@ -1,0 +1,34 @@
+{
+  "name": "better-auth-waitlist",
+  "version": "1.0.0",
+  "description": "A Better Auth plugin for waitlist functionality",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "better-auth",
+    "waitlist",
+    "plugin",
+    "authentication"
+  ],
+  "author": "",
+  "license": "MIT",
+  "packageManager": "pnpm@10.13.1",
+  "devDependencies": {
+    "@tanstack/config": "^0.20.0",
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.2"
+  },
+  "dependencies": {
+    "better-auth": "^1.3.4",
+    "stoker": "^2.0.1",
+    "zod": "^4.0.16"
+  }
+}
