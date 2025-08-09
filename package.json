@@ -1,7 +1,7 @@
 {
   "name": "better-auth-waitlist",
   "type": "module",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "A Better Auth plugin for waitlist functionality",
   "main": "dist/cjs/index.cjs",
   "module": "dist/esm/index.js",
@@ -18,6 +18,16 @@
       "require": {
         "types": "./dist/cjs/index.d.cts",
         "default": "./dist/cjs/index.cjs"
+      }
+    },
+    "./client": {
+      "import": {
+        "types": "./dist/esm/client.d.ts",
+        "default": "./dist/esm/client.js"
+      },
+      "require": {
+        "types": "./dist/cjs/client.d.cts",
+        "default": "./dist/cjs/client.cjs"
       }
     },
     "./package.json": "./package.json"

@@ -528,3 +528,6 @@ export function waitlist(options?: WaitlistOptions): BetterAuthPlugin {
     },
   } satisfies BetterAuthPlugin;
 }
+
+export { waitlistClient } from "./client";
+export type * from "./types";
