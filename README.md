@@ -6,9 +6,17 @@ A production-ready Better Auth plugin that provides a sophisticated waitlist sys
 
 ```bash
 npm install better-auth-waitlist
-# or
+```
+
+or
+
+```bash
 pnpm add better-auth-waitlist
-# or
+```
+
+or
+
+```bash
 yarn add better-auth-waitlist
 ```
 

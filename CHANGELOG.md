@@ -1,5 +1,23 @@
 # better-auth-waitlist
 
+## 2.1.3
+
+### Patch Changes
+
+- Move better-auth to peerDependencies to match Better Auth plugin patterns
+
+## 2.1.2
+
+### Patch Changes
+
+- Fix npm publish configuration by adding public access for unscoped package
+
+## 2.1.1
+
+### Patch Changes
+
+- Fix TypeScript build errors in client plugin by adding proper return type annotations
+
 ## 2.1.0
 
 ### Minor Changes
