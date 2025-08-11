@@ -1,6 +1,6 @@
 {
 	"name": "better-auth-waitlist",
-	"version": "3.0.0",
+	"version": "3.0.1",
 	"packageManager": "pnpm@10.13.1",
 	"description": "A lightweight Better Auth plugin for waitlist management with admin approval workflows, domain restrictions, and customizable validation.",
 	"author": "Seifeddine LARGAT <seifeddine.largat@outlook.com>",

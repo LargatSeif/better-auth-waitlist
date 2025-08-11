@@ -1,5 +1,11 @@
 # better-auth-waitlist
 
+## 3.0.1
+
+### Patch Changes
+
+- Add repository metadata and package optimizations- Add GitHub repository information to package.json- Include homepage, bugs URL, and enhanced description- Expand keywords for better npm discoverability- Optimize package files to exclude source maps- Add Node.js version requirement (>=18.0.0)- Add Better Auth Kit attribution in README- Improve package metadata for better ecosystem integration
+
 ## 3.0.0
 
 ### Major Changes
