@@ -2,19 +2,43 @@
 	"name": "better-auth-waitlist",
 	"version": "3.0.0",
 	"packageManager": "pnpm@10.13.1",
-	"description": "Better Auth Waitlist Plugin",
+	"description": "A lightweight Better Auth plugin for waitlist management with admin approval workflows, domain restrictions, and customizable validation.",
 	"author": "Seifeddine LARGAT <seifeddine.largat@outlook.com>",
 	"license": "ISC",
+	"homepage": "https://github.com/LargatSeif/better-auth-waitlist#readme",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/LargatSeif/better-auth-waitlist.git"
+	},
+	"bugs": {
+		"url": "https://github.com/LargatSeif/better-auth-waitlist/issues"
+	},
 	"keywords": [
 		"better-auth",
 		"waitlist",
-		"plugin"
+		"plugin",
+		"authentication",
+		"typescript",
+		"admin-approval",
+		"validation",
+		"esm"
+	],
+	"main": "./dist/index.mjs",
+	"types": "./dist/index.d.mts",
+	"files": [
+		"dist/*.mjs",
+		"dist/*.d.mts",
+		"README.md",
+		"CHANGELOG.md"
 	],
 	"exports": {
 		".": {
 			"types": "./dist/index.d.mts",
 			"default": "./dist/index.mjs"
 		}
+	},
+	"engines": {
+		"node": ">=18.0.0"
 	},
 	"scripts": {
 		"clean": "rm -rf dist",

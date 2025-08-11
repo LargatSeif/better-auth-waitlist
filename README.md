@@ -1,10 +1,11 @@
 # Better Auth Waitlist Plugin
 
 [![npm version](https://badge.fury.io/js/better-auth-waitlist.svg)](https://badge.fury.io/js/better-auth-waitlist)
-[![Bundle Size](https://img.shields.io/bundlephobia/minzip/better-auth-waitlist?label=bundle%20size)](https://bundlephobia.com/package/better-auth-waitlist)
-[![Bundle Size (min)](https://img.shields.io/bundlephobia/min/better-auth-waitlist?label=minified)](https://bundlephobia.com/package/better-auth-waitlist)
+
 
 A production-ready Better Auth plugin that provides a comprehensive waitlist system with admin approval workflows, domain restrictions, and customizable validation.
+
+> 💡 **Inspired by**: [Better Auth Kit Waitlist Plugin](https://www.better-auth-kit.com/docs/plugins/waitlist) - This implementation follows similar patterns and conventions.
 
 ## Bundle Size
 
@@ -202,6 +203,10 @@ This refactor makes the plugin much more maintainable and follows established Be
 ## License
 
 ISC
+
+## Acknowledgments
+
+This plugin was inspired by the [Better Auth Kit Waitlist Plugin](https://www.better-auth-kit.com/docs/plugins/waitlist) and follows similar architectural patterns and conventions established by the Better Auth ecosystem.
 
 ## Contributing
 
