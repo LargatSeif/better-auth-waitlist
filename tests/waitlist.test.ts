@@ -126,11 +126,20 @@ describe("waitlist", async () => {
 			JSON.stringify(response.data, null, 2),
 		);
 		expect(response.data).toBeDefined();
-		expect(response.data?.data?.length).toBeGreaterThanOrEqual(1);
-		expect(response.data?.data[0].email).toBe("condidate3@test.com");
-		expect(response.data?.total).toBeGreaterThanOrEqual(1);
-		expect(response.data?.page).toBe("1");
-		expect(response.data?.limit).toBe(10);
+		if (!response.data) {
+			return false;
+		}
+
+		const { data, total, page, limit } = response.data;
+		if (!data) {
+			return false;
+		}
+
+		expect(data.length).toBeGreaterThanOrEqual(1);
+		expect(data[0]!.email).toBe("condidate3@test.com");
+		expect(total).toBeGreaterThanOrEqual(1);
+		expect(Number(page)).toBe(1);
+		expect(limit).toBe(10);
 	});
 
 	it("should allow finding a waitlist request", async () => {
@@ -146,8 +155,9 @@ describe("waitlist", async () => {
 		});
 
 		expect(listResponse.data).toBeDefined();
-		if (!listResponse?.data) {
-			throw Error("List response is undefined");
+
+		if (!listResponse.data || !listResponse.data.data) {
+			return false;
 		}
 
 		const { data } = listResponse.data;
@@ -169,16 +179,15 @@ describe("waitlist", async () => {
 			JSON.stringify(singleResponse.data, null, 2),
 		);
 		expect(singleResponse.data).toBeDefined();
-		if (singleResponse.data) {
-			const { id, email, status, requestedAt, processedAt, processedBy } =
-				singleResponse.data;
-			expect(id).toBe(actualId);
-			expect(email).toBe("condidate3@test.com");
-			expect(status).toBe("pending");
-			expect(requestedAt).toBeDefined();
-			expect(processedAt).toBeUndefined();
-			expect(processedBy).toBeUndefined();
-		}
+
+		const { id, email, status, requestedAt, processedAt, processedBy } =
+			singleResponse.data!;
+		expect(id).toBe(actualId);
+		expect(email).toBe("condidate3@test.com");
+		expect(status).toBe("pending");
+		expect(requestedAt).toBeDefined();
+		expect(processedAt).toBeUndefined();
+		expect(processedBy).toBeUndefined();
 	});
 
 	it("should allow checking waitlist status", async () => {
@@ -223,12 +232,16 @@ describe("waitlist", async () => {
 			},
 		);
 
-		const entryId = listResponse.data?.data[0].id;
+		if (!listResponse.data?.data) {
+			return false;
+		}
+
+		const entryId = listResponse.data.data[0]!.id;
 		expect(entryId).toBeDefined();
 
 		const response = await client.waitlist.request.approve(
 			{
-				id: entryId!,
+				id: entryId,
 			},
 			{
 				headers,
@@ -267,6 +280,10 @@ describe("waitlist", async () => {
 		);
 
 		console.debug("Reject response:", response);
+		if (!response.data) {
+			return false;
+		}
+
 		expect(response.data?.message).toBe("Waitlist entry rejected");
 
 		// Verify status changed
