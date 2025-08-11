@@ -1,18 +1,28 @@
 {
-    "compilerOptions": {
-        "target": "ES2020",
-        "module": "ESNext",
-        "moduleResolution": "bundler",
-        "allowImportingTsExtensions": true,
-        "strict": true,
-        "declaration": true,
-        "noEmit": true,
-        "outDir": "dist",
-        "allowSyntheticDefaultImports": true,
-        "esModuleInterop": true,
-        "forceConsistentCasingInFileNames": true,
-        "skipLibCheck": true
-    },
-    "include": ["src/**/*", "vite.config.ts", "eslint.config.js", "tests/waitlist-api.test.ts", "tests/waitlist-client.test.ts", "tests/**/*.test.ts"],
-    "exclude": ["node_modules", "dist", "__tests__"]
+	"compilerOptions": {
+		"target": "ESNext",
+		"jsx": "react-jsx",
+		// Enable latest features
+		"lib": ["ESNext", "DOM"],
+		"moduleDetection": "force",
+		"module": "ESNext",
+
+		// Bundler mode
+		"moduleResolution": "bundler",
+		"allowJs": true,
+
+		// Best practices
+		"strict": true,
+		"noFallthroughCasesInSwitch": true,
+
+		"noPropertyAccessFromIndexSignature": false,
+		// Some stricter flags (disabled by default)
+		"noUnusedLocals": false,
+		"noUnusedParameters": false,
+		"declaration": true,
+		"verbatimModuleSyntax": true,
+		"skipLibCheck": true
+	},
+	"include": ["./src/**/*"],
+	"exclude": ["dist", "build.ts"]
 }

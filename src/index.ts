@@ -1,367 +1,707 @@
-import type { BetterAuthPlugin, Session, User, Where, ZodType } from "better-auth";
+import type { BetterAuthPlugin, Where } from "better-auth";
 
-import { APIError, createAuthEndpoint, createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
-import { mergeSchema } from "better-auth/db";
+import { createAuthEndpoint, sessionMiddleware } from "better-auth/api";
+import {
+	type FieldAttribute,
+	type InferFieldsInput,
+	mergeSchema,
+} from "better-auth/db";
+import { z } from "zod/v3";
+import {
+	HTTP_STATUS_CODE_MESSAGES,
+	HTTP_STATUS_CODES,
+	WAITLIST_ERROR_CODES,
+	WAITLIST_ERROR_MESSAGES,
+} from "./error-codes";
+import { schema, WAITLIST_STATUS } from "./schema";
+import type { WaitlistEntry, WaitlistOptions } from "./types";
 
-import type { WaitlistEntry, WaitlistOptions, WaitlistRequest } from "./types";
+export * from "./client";
+export * from "./error-codes";
+export * from "./schema";
+export * from "./types";
 
-import { getWaitlistAdapter } from "./adapter";
-import { HTTP_STATUS_CODES, WAITLIST_ERROR_CODES, WAITLIST_ERROR_MESSAGES } from "./error-codes";
-import { DEFAULT_WAITLIST_SORT_BY, DEFAULT_WAITLIST_SORT_DIRECTION, schema, WAITLIST_STATUS, waitlistRequestSchema, waitlistSearchSchema } from "./schema";
-import { convertAdditionalFieldsToZodSchema, entriesFromObject, validateEmailDomain } from "./utils";
+// eslint-disable-next-line antfu/top-level-function, ts/explicit-function-return-type
+export const waitlist = <O extends WaitlistOptions>(options?: O) => {
+	const opts = {
+		enabled: options?.enabled ?? false,
+		schema: options?.schema,
+		allowedDomains: options?.allowedDomains,
+		disableSignInAndSignUp: options?.disableSignInAndSignUp ?? false,
+		maximumWaitlistParticipants:
+			options?.maximumWaitlistParticipants ?? undefined,
+		autoApprove: options?.autoApprove ?? false,
+		validateEntry: options?.validateEntry,
+		onStatusChange: options?.onStatusChange,
+		onJoinRequest: options?.onJoinRequest,
+		notifications: options?.notifications,
+		rateLimit: options?.rateLimit,
+		additionalFields: options?.additionalFields ?? {},
+		canManageWaitlist: options?.canManageWaitlist,
+	} satisfies WaitlistOptions;
 
-export function waitlist(options?: WaitlistOptions): BetterAuthPlugin {
-    const opts = {
-        enabled: options?.enabled ?? false,
-        schema: options?.schema,
-        allowedDomains: options?.allowedDomains,
-        disableSignInAndSignUp: options?.disableSignInAndSignUp ?? false,
-        maximumWaitlistParticipants: options?.maximumWaitlistParticipants ?? undefined,
-        autoApprove: options?.autoApprove ?? false,
-        validateEntry: options?.validateEntry,
-        onStatusChange: options?.onStatusChange,
-        notifications: options?.notifications,
-        rateLimit: options?.rateLimit,
-        additionalFields: options?.additionalFields,
-    } satisfies WaitlistOptions;
+	// Start with a deep copy of the schema
+	// Use manual deep copy to handle functions that structuredClone can't handle
+	const baseSchema = {
+		waitlist: {
+			...schema.waitlist,
+			fields: {
+				...schema.waitlist.fields,
+			},
+		},
+	};
 
-    const mergedSchema = mergeSchema(schema, opts.schema);
-    mergedSchema.waitlist.fields = {
-        ...mergedSchema.waitlist.fields,
-        ...opts.additionalFields,
-    };
+	// Now merge with user-provided schema
+	const mergedSchema = mergeSchema(baseSchema, opts.schema);
+	mergedSchema.waitlist.fields = {
+		...mergedSchema.waitlist.fields,
+		...opts.additionalFields,
+	};
 
-    // type WaitlistEntryModified = WaitlistEntry & InferFieldsInput<typeof opts.additionalFields>;
-    const model = Object.keys(mergedSchema)[0] as string;
+	type WaitlistEntryModified = WaitlistEntry &
+		InferFieldsInput<typeof opts.additionalFields>;
 
-    const adminMiddleware = createAuthMiddleware(async (ctx) => {
-        const session = await getSessionFromCtx(ctx);
-        if (!session) {
-            throw new APIError("UNAUTHORIZED");
-        }
-        if (session.user.role !== "admin") {
-            throw ctx.error(HTTP_STATUS_CODES.UNAUTHORIZED, {
-                code: WAITLIST_ERROR_CODES.UNAUTHORIZED,
-                message: WAITLIST_ERROR_MESSAGES[WAITLIST_ERROR_CODES.UNAUTHORIZED],
-            });
-        }
-        return {
-            session,
-        } as {
-            session: {
-                user: User & { role: "admin" };
-                session: Session;
-            };
-        };
-    });
+	const model = Object.keys(mergedSchema)[0];
 
-    const addUserToWaitlist = createAuthEndpoint(
-        "/waitlist/add-user",
-        {
-            method: "POST",
-            body: convertAdditionalFieldsToZodSchema({
-                ...opts.additionalFields,
-                email: { type: "string", required: true },
-            }) as never as ZodType<Omit<WaitlistEntry, "id" | "requestedAt"> & { email: string }>,
-            metadata: {
-                openapi: {
-                    operationId: "addUserToWaitlist",
-                    description: "Add a user to the waitlist",
-                    responses: {
-                        [HTTP_STATUS_CODES.CREATED]: {
-                            description: "success",
-                            content: {
-                                "application/json": {
-                                    schema: {
-                                        $ref: "#/components/schemas/WaitListEntry",
-                                        type: "object",
-                                        properties: {
-                                            message: {
-                                                type: "string",
-                                                description: "The message of the response",
-                                            },
-                                            success: {
-                                                type: "boolean",
-                                            },
-                                            details: {
-                                                type: "object",
-                                                properties: {
-                                                    id: {
-                                                        type: "string",
-                                                    },
-                                                    email: {
-                                                        type: "string",
-                                                        format: "email",
-                                                    },
-                                                    requestedAt: {
-                                                        type: "string",
-                                                        format: "date-time",
-                                                    },
-                                                },
-                                                required: [
-                                                    "id",
-                                                    "email",
-                                                    "requestedAt",
-                                                ],
-                                            },
-                                        },
-                                    },
-                                },
-                            },
-                        },
-                        [HTTP_STATUS_CODES.UNAUTHORIZED]: {
-                            description: "Unauthorized access",
-                            content: {
-                                "application/json": {
-                                    schema: {
-                                        $ref: "#/components/schemas/WaitListEntryUnauthorized",
-                                        type: "object",
-                                        properties: {
-                                            code: {
-                                                type: "string",
-                                            },
-                                            message: {
-                                                type: "string",
-                                            },
-                                        },
-                                        required: ["code", "message"],
-                                    },
-                                },
-                            },
-                        },
-                    },
-                },
-            },
-        },
-        async (ctx) => {
-            if (!opts.enabled) {
-                throw ctx.error(HTTP_STATUS_CODES.UNAUTHORIZED, {
-                    code: WAITLIST_ERROR_CODES.WAITLIST_NOT_ENABLED,
-                    message: WAITLIST_ERROR_MESSAGES[WAITLIST_ERROR_CODES.WAITLIST_NOT_ENABLED],
-                });
-            }
+	return {
+		id: "waitlist",
+		schema: mergedSchema,
+		$ERROR_CODES: WAITLIST_ERROR_CODES,
+		endpoints: {
+			join: createAuthEndpoint(
+				"/waitlist/join",
+				{
+					method: "POST",
+					body: convertAdditionalFieldsToZodSchema({
+						...opts.additionalFields,
+						email: { type: "string", required: true },
+					}) as never as z.ZodType<
+						Omit<
+							WaitlistEntry,
+							| "id"
+							| "status"
+							| "requestedAt"
+							| "processedAt"
+							| "processedBy"
+							| "requestedAt"
+						>
+					>,
+				},
+				async (ctx) => {
+					if (!opts.enabled) {
+						throw ctx.error(HTTP_STATUS_CODES.FORBIDDEN, {
+							code: WAITLIST_ERROR_CODES.WAITLIST_NOT_ENABLED,
+							message:
+								WAITLIST_ERROR_MESSAGES[
+									WAITLIST_ERROR_CODES.WAITLIST_NOT_ENABLED
+								],
+						});
+					}
 
-            const { email, ...rest } = ctx.body as { email: string } & Record<string, any>;
-            const waitlistAdapter = getWaitlistAdapter(ctx.context.adapter, model);
+					const { email, ...everythingElse } = ctx.body as {
+						email: string;
+					} & Record<string, any>;
 
-            const alreadyInWaitlist = await waitlistAdapter.findWaitlistEntryByEmail(email);
-            if (alreadyInWaitlist) {
-                throw ctx.error(HTTP_STATUS_CODES.UNAUTHORIZED, {
-                    code: WAITLIST_ERROR_CODES.EMAIL_ALREADY_IN_WAITLIST,
-                    message: WAITLIST_ERROR_MESSAGES[WAITLIST_ERROR_CODES.EMAIL_ALREADY_IN_WAITLIST],
-                });
-            }
+					const found =
+						await ctx.context.adapter.findOne<WaitlistEntryModified>({
+							model: model,
+							where: [
+								{
+									field: "email",
+									value: email,
+									operator: "eq",
+								},
+							],
+						});
 
-            if (opts.maximumWaitlistParticipants) {
-                const count = await waitlistAdapter.getWaitlistCount([{ field: "status", value: WAITLIST_STATUS.PENDING, operator: "eq" }]);
-                if (count >= opts.maximumWaitlistParticipants) {
-                    throw ctx.error(HTTP_STATUS_CODES.TOO_MANY_REQUESTS, {
-                        code: WAITLIST_ERROR_CODES.WAITLIST_FULL,
-                        message: WAITLIST_ERROR_MESSAGES[WAITLIST_ERROR_CODES.WAITLIST_FULL],
-                    });
-                }
-            }
+					if (found) {
+						throw ctx.error(HTTP_STATUS_CODES.FORBIDDEN, {
+							code: WAITLIST_ERROR_CODES.EMAIL_ALREADY_IN_WAITLIST,
+							message:
+								WAITLIST_ERROR_MESSAGES[
+									WAITLIST_ERROR_CODES.EMAIL_ALREADY_IN_WAITLIST
+								],
+						});
+					}
 
-            if (opts.allowedDomains && !validateEmailDomain(email, opts.allowedDomains)) {
-                throw ctx.error(HTTP_STATUS_CODES.UNAUTHORIZED, {
-                    code: WAITLIST_ERROR_CODES.DOMAIN_NOT_ALLOWED,
-                    message: WAITLIST_ERROR_MESSAGES[WAITLIST_ERROR_CODES.DOMAIN_NOT_ALLOWED],
-                });
-            }
+					let count: number | null = null;
 
-            if (opts.validateEntry) {
-                const isValid = await opts.validateEntry({ email, ...rest });
-                if (!isValid) {
-                    throw ctx.error(HTTP_STATUS_CODES.UNPROCESSABLE_ENTITY, {
-                        code: WAITLIST_ERROR_CODES.INVALID_ENTRY,
-                        message: WAITLIST_ERROR_MESSAGES[WAITLIST_ERROR_CODES.INVALID_ENTRY],
-                    });
-                }
-            }
+					if (opts.maximumWaitlistParticipants) {
+						count = await ctx.context.adapter.count({
+							model,
+							where: [
+								{
+									field: "status",
+									operator: "eq",
+									value: WAITLIST_STATUS.PENDING,
+								},
+							],
+						});
 
-            const newEntry = await waitlistAdapter.createWaitlistEntry({ email, ...rest });
+						if (count >= opts.maximumWaitlistParticipants) {
+							throw ctx.error(HTTP_STATUS_CODES.FORBIDDEN, {
+								code: WAITLIST_ERROR_CODES.WAITLIST_FULL,
+								message:
+									WAITLIST_ERROR_MESSAGES[WAITLIST_ERROR_CODES.WAITLIST_FULL],
+							});
+						}
+					}
 
-            return ctx.json({
-                message: "Created waitlist entry",
-                recap: {
-                    success: true,
-                    details: {
-                        id: newEntry.id,
-                        email: newEntry.email,
-                        requestedAt: newEntry.requestedAt,
-                    },
-                },
-            }, {
-                status: HTTP_STATUS_CODES.CREATED,
-            });
-        },
-    );
+					const newJoinRequest =
+						await ctx.context.adapter.create<WaitlistEntryModified>({
+							model,
+							data: {
+								email,
+								status: WAITLIST_STATUS.PENDING,
+								requestedAt: new Date(),
+								...everythingElse,
+							},
+						});
 
-    const getWaitlist = createAuthEndpoint(
-        "/waitlist/requests/list",
-        {
-            method: "GET",
-            query: waitlistSearchSchema.extend(convertAdditionalFieldsToZodSchema(opts.additionalFields ?? {}).shape),
-            use: [adminMiddleware],
-            metadata: {
-                openapi: {
-                    responses: {
-                        [HTTP_STATUS_CODES.OK]: {
-                            description: "The waitlist requests",
-                            content: {
-                                "application/json": {
-                                    schema: {
-                                        $ref: "#/components/schemas/WaitListEntry",
-                                    },
-                                },
-                            },
-                        },
-                    },
-                },
-            },
-        },
-        async (ctx) => {
-            const { status, email, sortBy, sortDirection, page, limit, ...additionalFields } = ctx.query;
-            const waitlistAdapter = getWaitlistAdapter(ctx.context.adapter, model);
+					opts.onJoinRequest?.({
+						request: newJoinRequest,
+					});
 
-            const where: Where[] = [];
-            if (status)
-                where.push({ field: "status", value: status as string, operator: "eq" });
-            if (email)
-                where.push({ field: "email", value: email as string, operator: "eq" });
+					return ctx.json({
+						id: newJoinRequest.id,
+						email: newJoinRequest.email,
+						requestedAt: newJoinRequest.requestedAt,
+						...everythingElse,
+					});
+				},
+			),
+			list: createAuthEndpoint(
+				"/waitlist/list",
+				{
+					method: "GET",
+					use: [sessionMiddleware],
+					query: z.object({
+						page: z.string().or(z.number()).optional(),
+						limit: z.string().or(z.number()).optional(),
+						status: z
+							.enum([
+								WAITLIST_STATUS.APPROVED,
+								WAITLIST_STATUS.PENDING,
+								WAITLIST_STATUS.REJECTED,
+							])
+							.describe("The status of the waitlist entries to filter by")
+							.optional(),
+						sortBy: z
+							.enum(["requestedAt", "status"])
+							.describe("The field to sort by")
+							.optional(),
+						direction: z
+							.enum(["asc", "desc"])
+							.describe("The direction to sort by")
+							.optional(),
+					}),
+					metadata: {
+						openapi: {
+							responses: {
+								200: {
+									description: "List of waitlist requests",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													waitlist: {
+														type: "array",
+														items: {
+															$ref: "#/components/schemas/WaitlistEntry",
+														},
+													},
+													total: {
+														type: "number",
+													},
+													limit: {
+														type: ["number", "undefined"],
+													},
+													page: {
+														type: ["number", "undefined"],
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					const { user } = ctx.context.session;
 
-            if (Object.keys(additionalFields).length > 0) {
-                for (const [key, value] of entriesFromObject(additionalFields)) {
-                    where.push({ field: key, value, operator: "eq" } as unknown as Where);
-                }
-            }
+					if (!user) {
+						ctx.error(HTTP_STATUS_CODES.UNAUTHORIZED, {
+							code: WAITLIST_ERROR_CODES.UNAUTHORIZED,
+							message:
+								WAITLIST_ERROR_MESSAGES[WAITLIST_ERROR_CODES.UNAUTHORIZED],
+						});
+					}
 
-            const waitlistEntries = await waitlistAdapter.listWaitlistEntries({
-                where: where.length > 0 ? where : undefined,
-                sortBy: {
-                    field: (sortBy as string) || DEFAULT_WAITLIST_SORT_BY,
-                    direction: (sortDirection as "asc" | "desc") || DEFAULT_WAITLIST_SORT_DIRECTION,
-                },
-                limit: limit as number,
-                offset: ((page as number) === 1 ? 0 : (page as number) - 1) * (limit as number),
-            });
+					// Use custom canManageWaitlist function if provided
+					if (opts.canManageWaitlist) {
+						const hasAccess = await opts.canManageWaitlist(user);
+						if (!hasAccess) {
+							throw ctx.error("FORBIDDEN", {
+								code: WAITLIST_ERROR_CODES.FORBIDDEN,
+								message:
+									WAITLIST_ERROR_MESSAGES[WAITLIST_ERROR_CODES.FORBIDDEN],
+							});
+						}
+					} else {
+						// Default access control - check if user is admin
+						if (user.role !== "admin") {
+							throw ctx.error("FORBIDDEN", {
+								code: WAITLIST_ERROR_CODES.FORBIDDEN,
+								message:
+									WAITLIST_ERROR_MESSAGES[WAITLIST_ERROR_CODES.FORBIDDEN],
+							});
+						}
+					}
 
-            return { waitlist: waitlistEntries };
-        },
-    );
+					const {
+						page = 1,
+						limit: rawLimit = 10,
+						status,
+						sortBy = "requestedAt",
+						direction = "desc",
+					} = ctx.query;
+					// page starts at 1, so we need to subtract 1 to get the offset
+					const offset = (page === 1 ? 0 : Number(page) - 1) * Number(rawLimit);
+					const limit = Number(rawLimit);
 
-    const getWaitlistCount = createAuthEndpoint(
-        "/waitlist/requests/count",
-        {
-            method: "GET",
-            use: [adminMiddleware],
-            metadata: {
-                openapi: {
-                    responses: {
-                        [HTTP_STATUS_CODES.OK]: {
-                            description: "The waitlist count",
-                            content: { "application/json": { schema: { $ref: "#/components/schemas/WaitListEntry" } } },
-                        },
-                    },
-                },
-            },
-        },
-        async (ctx) => {
-            const waitlistAdapter = getWaitlistAdapter(ctx.context.adapter, model);
-            const count = await waitlistAdapter.getWaitlistCount([{ field: "status", value: WAITLIST_STATUS.ACCEPTED, operator: "ne" }]);
-            return { count };
-        },
-    );
+					const sortByField = sortBy ?? ("requestedAt" as const);
+					const sortDirection =
+						direction === "desc" ? "desc" : ("asc" as const);
 
-    const approveWaitlistRequest = createAuthEndpoint(
-        "/waitlist/request/approve",
-        {
-            method: "POST",
-            body: waitlistRequestSchema.pick({ id: true }),
-            use: [adminMiddleware],
-        },
-        async (ctx) => {
-            const { id } = ctx.body as { id: string };
-            const waitlistAdapter = getWaitlistAdapter(ctx.context.adapter, model);
+					const filters: Where[] = [];
+					if (status) {
+						filters.push({
+							field: "status",
+							operator: "eq",
+							value: status,
+						});
+					}
 
-            const entry = await waitlistAdapter.updateWaitlistEntry(id, {
-                status: WAITLIST_STATUS.ACCEPTED,
-                processedAt: new Date(),
-                processedBy: ctx.context.session.user.id,
-            });
+					const totalCount = await ctx.context.adapter.count({
+						model,
+						where: filters,
+					});
 
-            if (!entry) {
-                throw ctx.error(HTTP_STATUS_CODES.NOT_FOUND, {
-                    code: WAITLIST_ERROR_CODES.WAITLIST_ENTRY_NOT_FOUND,
-                    message: WAITLIST_ERROR_MESSAGES[WAITLIST_ERROR_CODES.WAITLIST_ENTRY_NOT_FOUND],
-                });
-            }
+					const waitlistEntries =
+						await ctx.context.adapter.findMany<WaitlistEntryModified>({
+							model,
+							where: filters,
+							limit,
+							offset,
+							sortBy: {
+								field: sortByField,
+								direction: sortDirection,
+							},
+						});
 
-            return ctx.json({ message: "Waitlist entry approved", details: entry }, {
-                status: HTTP_STATUS_CODES.OK,
-            });
-        },
-    );
+					return ctx.json({
+						data: waitlistEntries,
+						page,
+						limit,
+						total: totalCount,
+					});
+				},
+			),
+			findOne: createAuthEndpoint(
+				"/waitlist/request/find",
+				{
+					method: "GET",
+					query: z.object({
+						id: z.string(),
+					}),
+					use: [sessionMiddleware],
+					metadata: {
+						openapi: {
+							responses: {
+								200: {
+									description: "Waitlist entry details",
+								},
+								401: {
+									description: "You are not authorized to perform this action",
+								},
+								403: {
+									description: "Not enough permissions to perform this action",
+								},
+								404: {
+									description: "Waitlist entry not found",
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					// check if user is admin
+					const { user } = ctx.context.session;
 
-    const rejectWaitlistRequest = createAuthEndpoint(
-        "/waitlist/request/reject",
-        {
-            method: "POST",
-            body: waitlistRequestSchema.pick({ id: true }),
-            use: [adminMiddleware],
-        },
-        async (ctx) => {
-            const { id } = ctx.body as { id: string };
-            const waitlistAdapter = getWaitlistAdapter(ctx.context.adapter, model);
+					if (!user) {
+						throw ctx.error(HTTP_STATUS_CODES.UNAUTHORIZED, {
+							code: WAITLIST_ERROR_CODES.UNAUTHORIZED,
+							message:
+								WAITLIST_ERROR_MESSAGES[WAITLIST_ERROR_CODES.UNAUTHORIZED],
+						});
+					}
 
-            const entry = await waitlistAdapter.updateWaitlistEntry(id, {
-                status: WAITLIST_STATUS.REJECTED,
-                processedAt: new Date(),
-                processedBy: ctx.context.session.user.id,
-            });
+					// Use custom canManageWaitlist function if provided
+					if (opts.canManageWaitlist) {
+						const hasAccess = await opts.canManageWaitlist(user);
+						if (!hasAccess) {
+							throw ctx.error(HTTP_STATUS_CODES.FORBIDDEN, {
+								code: WAITLIST_ERROR_CODES.FORBIDDEN,
+								message:
+									WAITLIST_ERROR_MESSAGES[WAITLIST_ERROR_CODES.FORBIDDEN],
+							});
+						}
+					} else {
+						// Default access control - check if user is admin
+						if (user.role !== "admin") {
+							throw ctx.error(HTTP_STATUS_CODES.FORBIDDEN, {
+								code: WAITLIST_ERROR_CODES.FORBIDDEN,
+								message:
+									WAITLIST_ERROR_MESSAGES[WAITLIST_ERROR_CODES.FORBIDDEN],
+							});
+						}
+					}
 
-            if (!entry) {
-                throw ctx.error(HTTP_STATUS_CODES.NOT_FOUND, {
-                    code: WAITLIST_ERROR_CODES.WAITLIST_ENTRY_NOT_FOUND,
-                    message: WAITLIST_ERROR_MESSAGES[WAITLIST_ERROR_CODES.WAITLIST_ENTRY_NOT_FOUND],
-                });
-            }
+					const { id } = ctx.query;
 
-            return ctx.json({ message: "Waitlist entry rejected" }, {
-                status: HTTP_STATUS_CODES.OK,
-            });
-        },
-    );
+					const waitlistEntry =
+						await ctx.context.adapter.findOne<WaitlistEntryModified>({
+							model,
+							where: [
+								{
+									field: "id",
+									operator: "eq",
+									value: id,
+								},
+							],
+						});
 
-    return {
-        id: "waitlist",
-        schema: mergedSchema,
-        $ERROR_CODES: WAITLIST_ERROR_CODES,
-        options: {
-            databaseHooks: {
-                waitlist: {
-                    create: {
-                        before(payload: { data: WaitlistRequest }) {
-                            return {
-                                data: {
-                                    ...payload.data,
-                                    status: WAITLIST_STATUS.PENDING,
-                                },
-                            };
-                        },
-                    },
-                },
-            },
-        },
-        endpoints: {
-            addUserToWaitlist,
-            getWaitlist,
-            getWaitlistCount,
-            approveWaitlistRequest,
-            rejectWaitlistRequest,
-        },
-    } satisfies BetterAuthPlugin;
+					if (!waitlistEntry) {
+						throw ctx.error(HTTP_STATUS_CODES.NOT_FOUND, {
+							code: WAITLIST_ERROR_CODES.WAITLIST_ENTRY_NOT_FOUND,
+							message:
+								WAITLIST_ERROR_MESSAGES[
+									WAITLIST_ERROR_CODES.WAITLIST_ENTRY_NOT_FOUND
+								],
+						});
+					}
+
+					return ctx.json(waitlistEntry, {
+						status: HTTP_STATUS_CODES.OK,
+						statusText: HTTP_STATUS_CODE_MESSAGES[HTTP_STATUS_CODES.OK],
+					});
+				},
+			),
+			checkRequestStatus: createAuthEndpoint(
+				"/waitlist/request/check-status",
+				{
+					method: "GET",
+					query: z.object({
+						email: z.string().email(),
+					}),
+					metadata: {
+						openapi: {
+							responses: {
+								200: {
+									description: "Waitlist entry status",
+								},
+								404: {
+									description: "Waitlist entry not found",
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					const { email } = ctx.query;
+
+					const waitlistEntry =
+						await ctx.context.adapter.findOne<WaitlistEntryModified>({
+							model,
+							where: [
+								{
+									field: "email",
+									operator: "eq",
+									value: email,
+								},
+							],
+						});
+
+					if (!waitlistEntry) {
+						throw ctx.error(HTTP_STATUS_CODES.NOT_FOUND, {
+							code: WAITLIST_ERROR_CODES.WAITLIST_ENTRY_NOT_FOUND,
+							message:
+								WAITLIST_ERROR_MESSAGES[
+									WAITLIST_ERROR_CODES.WAITLIST_ENTRY_NOT_FOUND
+								],
+						});
+					}
+
+					return ctx.json({
+						status: waitlistEntry?.status,
+						requestedAt: waitlistEntry?.requestedAt,
+					});
+				},
+			),
+			approveRequest: createAuthEndpoint(
+				"/waitlist/request/approve",
+				{
+					method: "POST",
+					body: z.object({
+						id: z.string(),
+					}),
+					use: [sessionMiddleware],
+					metadata: {
+						openapi: {
+							responses: {
+								200: {
+									description: "Waitlist entry approved",
+								},
+								401: {
+									description: "You are not authorized to perform this action",
+								},
+								403: {
+									description: "Not enough permissions to perform this action",
+								},
+								404: {
+									description: "Waitlist entry not found",
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					const { user } = ctx.context.session;
+
+					if (!user) {
+						throw ctx.error(HTTP_STATUS_CODES.UNAUTHORIZED, {
+							code: WAITLIST_ERROR_CODES.UNAUTHORIZED,
+							message:
+								WAITLIST_ERROR_MESSAGES[WAITLIST_ERROR_CODES.UNAUTHORIZED],
+						});
+					}
+
+					// Use custom canManageWaitlist function if provided
+					if (opts.canManageWaitlist) {
+						const hasAccess = await opts.canManageWaitlist(user);
+						if (!hasAccess) {
+							throw ctx.error(HTTP_STATUS_CODES.FORBIDDEN, {
+								code: WAITLIST_ERROR_CODES.FORBIDDEN,
+								message:
+									WAITLIST_ERROR_MESSAGES[WAITLIST_ERROR_CODES.FORBIDDEN],
+							});
+						}
+					} else {
+						// Default access control - check if user is admin
+						if (user.role !== "admin") {
+							throw ctx.error(HTTP_STATUS_CODES.FORBIDDEN, {
+								code: WAITLIST_ERROR_CODES.FORBIDDEN,
+								message:
+									WAITLIST_ERROR_MESSAGES[WAITLIST_ERROR_CODES.FORBIDDEN],
+							});
+						}
+					}
+
+					const { id } = ctx.body;
+
+					const waitlistEntry =
+						await ctx.context.adapter.findOne<WaitlistEntryModified>({
+							model,
+							where: [
+								{
+									field: "id",
+									operator: "eq",
+									value: id,
+								},
+							],
+						});
+
+					if (!waitlistEntry) {
+						throw ctx.error(HTTP_STATUS_CODES.NOT_FOUND, {
+							code: WAITLIST_ERROR_CODES.WAITLIST_ENTRY_NOT_FOUND,
+							message:
+								WAITLIST_ERROR_MESSAGES[
+									WAITLIST_ERROR_CODES.WAITLIST_ENTRY_NOT_FOUND
+								],
+						});
+					}
+
+					await ctx.context.adapter.update<WaitlistEntryModified>({
+						model,
+						where: [
+							{
+								field: "id",
+								operator: "eq",
+								value: id,
+							},
+						],
+						update: {
+							status: WAITLIST_STATUS.APPROVED,
+							processedAt: new Date(),
+							processedBy: user.id,
+						},
+					});
+
+					return ctx.json(
+						{
+							message: "Waitlist entry approved",
+						},
+						{
+							status: HTTP_STATUS_CODES.OK,
+							statusText: HTTP_STATUS_CODE_MESSAGES[HTTP_STATUS_CODES.OK],
+						},
+					);
+				},
+			),
+			rejectRequest: createAuthEndpoint(
+				"/waitlist/request/reject",
+				{
+					method: "POST",
+					body: z.object({
+						id: z.string(),
+					}),
+					use: [sessionMiddleware],
+					metadata: {
+						openapi: {
+							responses: {
+								200: {
+									description: "Waitlist entry rejected",
+								},
+								401: {
+									description: "You are not authorized to perform this action",
+								},
+								403: {
+									description: "Not enough permissions to perform this action",
+								},
+								404: {
+									description: "Waitlist entry not found",
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					const { user } = ctx.context.session;
+
+					if (!user) {
+						throw ctx.error(HTTP_STATUS_CODES.UNAUTHORIZED, {
+							code: WAITLIST_ERROR_CODES.UNAUTHORIZED,
+							message:
+								WAITLIST_ERROR_MESSAGES[WAITLIST_ERROR_CODES.UNAUTHORIZED],
+						});
+					}
+
+					// Use custom canManageWaitlist function if provided
+					if (opts.canManageWaitlist) {
+						const hasAccess = await opts.canManageWaitlist(user);
+						if (!hasAccess) {
+							throw ctx.error(HTTP_STATUS_CODES.FORBIDDEN, {
+								code: WAITLIST_ERROR_CODES.FORBIDDEN,
+								message:
+									WAITLIST_ERROR_MESSAGES[WAITLIST_ERROR_CODES.FORBIDDEN],
+							});
+						}
+					} else {
+						// Default access control - check if user is admin
+						if (user.role !== "admin") {
+							throw ctx.error(HTTP_STATUS_CODES.FORBIDDEN, {
+								code: WAITLIST_ERROR_CODES.FORBIDDEN,
+								message:
+									WAITLIST_ERROR_MESSAGES[WAITLIST_ERROR_CODES.FORBIDDEN],
+							});
+						}
+					}
+
+					const { id } = ctx.body;
+
+					const waitlistEntry =
+						await ctx.context.adapter.findOne<WaitlistEntryModified>({
+							model,
+							where: [
+								{
+									field: "id",
+									operator: "eq",
+									value: id,
+								},
+							],
+						});
+
+					if (!waitlistEntry) {
+						throw ctx.error(HTTP_STATUS_CODES.NOT_FOUND, {
+							code: WAITLIST_ERROR_CODES.WAITLIST_ENTRY_NOT_FOUND,
+							message:
+								WAITLIST_ERROR_MESSAGES[
+									WAITLIST_ERROR_CODES.WAITLIST_ENTRY_NOT_FOUND
+								],
+						});
+					}
+
+					await ctx.context.adapter.update<WaitlistEntryModified>({
+						model,
+						where: [
+							{
+								field: "id",
+								operator: "eq",
+								value: id,
+							},
+						],
+						update: {
+							status: WAITLIST_STATUS.REJECTED,
+							processedAt: new Date(),
+							processedBy: user.id,
+						},
+					});
+
+					return ctx.json(
+						{
+							message: "Waitlist entry rejected",
+						},
+						{
+							status: HTTP_STATUS_CODES.OK,
+							statusText: HTTP_STATUS_CODE_MESSAGES[HTTP_STATUS_CODES.OK],
+						},
+					);
+				},
+			),
+		},
+	} satisfies BetterAuthPlugin;
+};
+
+// eslint-disable-next-line ts/explicit-function-return-type
+function convertAdditionalFieldsToZodSchema(
+	additionalFields: Record<string, FieldAttribute>,
+) {
+	const additionalFieldsZodSchema: z.ZodRawShape = {};
+	for (const [key, value] of Object.entries(additionalFields)) {
+		let res: z.ZodTypeAny;
+
+		if (value.type === "string") {
+			res = z.string();
+		} else if (value.type === "number") {
+			res = z.number();
+		} else if (value.type === "boolean") {
+			res = z.boolean();
+		} else if (value.type === "date") {
+			res = z.date();
+		} else if (value.type === "string[]") {
+			res = z.array(z.string());
+		} else {
+			res = z.array(z.number());
+		}
+
+		if (!value.required) {
+			res = res.optional();
+		}
+
+		additionalFieldsZodSchema[key] = res;
+	}
+	return z.object(additionalFieldsZodSchema);
 }
-
-export { waitlistClient } from "./client";
-export type * from "./types";
