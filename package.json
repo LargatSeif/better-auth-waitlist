@@ -1,6 +1,6 @@
 {
 	"name": "better-auth-waitlist",
-	"version": "2.1.8",
+	"version": "3.0.0",
 	"packageManager": "pnpm@10.13.1",
 	"description": "Better Auth Waitlist Plugin",
 	"author": "Seifeddine LARGAT <seifeddine.largat@outlook.com>",
@@ -22,7 +22,9 @@
 		"lint:fix": "biome check . --write",
 		"build": "tsup src/index.ts",
 		"test": "vitest",
-		"prebuild": "pnpm clean"
+		"prebuild": "pnpm clean",
+		"changeset": "changeset",
+		"version": "changeset version"
 	},
 	"peerDependencies": {
 		"better-auth": "^1.3.4"
@@ -32,6 +34,7 @@
 	},
 	"devDependencies": {
 		"@better-auth-kit/tests": "^0.2.0",
+		"@changesets/cli": "^2.29.5",
 		"tsup": "^8.5.0",
 		"typescript": "^5.9.2",
 		"vite-tsconfig-paths": "^5.1.4",

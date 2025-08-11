@@ -147,6 +147,37 @@ export const waitlist = <O extends WaitlistOptions>(options?: O) => {
 						}
 					}
 
+					if (opts.validateEntry) {
+						const isValid = await opts.validateEntry({
+							email,
+							...everythingElse,
+						});
+
+						if (!isValid) {
+							throw ctx.error(HTTP_STATUS_CODES.FORBIDDEN, {
+								code: WAITLIST_ERROR_CODES.INVALID_ENTRY,
+								message:
+									WAITLIST_ERROR_MESSAGES[WAITLIST_ERROR_CODES.INVALID_ENTRY],
+							});
+						}
+					}
+
+					if (opts.allowedDomains) {
+						const isAllowedDomain = opts.allowedDomains.some((domain) =>
+							email.endsWith(domain),
+						);
+
+						if (!isAllowedDomain) {
+							throw ctx.error(HTTP_STATUS_CODES.FORBIDDEN, {
+								code: WAITLIST_ERROR_CODES.DOMAIN_NOT_ALLOWED,
+								message:
+									WAITLIST_ERROR_MESSAGES[
+										WAITLIST_ERROR_CODES.DOMAIN_NOT_ALLOWED
+									],
+							});
+						}
+					}
+
 					const newJoinRequest =
 						await ctx.context.adapter.create<WaitlistEntryModified>({
 							model,
