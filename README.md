@@ -202,7 +202,7 @@ This refactor makes the plugin much more maintainable and follows established Be
 
 ## License
 
-ISC
+MIT
 
 ## Acknowledgments
 
